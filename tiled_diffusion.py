@@ -768,8 +768,9 @@ class MixtureOfDiffusers(AbstractDiffusion):
                 for bbox in bboxes:
                     x_tile_list.append(x_in[bbox.slicer])
 
-                x_tile = torch.cat(x_tile_list, dim=0)                     # differs each
+                x_tile = torch.cat(x_tile_list, dim=0)                 # differs each
                 t_tile = repeat_to_batch_size(t_in, x_tile.shape[0])   # just repeat
+                
                 c_tile = {}
                 for k, v in c_in.items():
                     if isinstance(v, torch.Tensor):
@@ -791,7 +792,32 @@ class MixtureOfDiffusers(AbstractDiffusion):
                         if v.shape[0] != x_tile.shape[0]:
                             v = repeat_to_batch_size(v, x_tile.shape[0])
                     c_tile[k] = v
-                
+              
+                if 'c_crossattn' in c_in and self.custom_crossattn is not None:
+             
+                    print("cross attention")
+                    print(c_in['c_crossattn'])
+                    print("custom_crossattn")
+                    print(self.custom_crossattn)
+                    print("custom_crossattn")
+                    print(self.custom_crossattn)
+                    
+                    print(c_in['c_crossattn'].shape)
+                    print(len(self.custom_crossattn))
+                    print(self.custom_crossattn[0][0].shape)
+                    print(self.custom_crossattn[0][1].keys())
+                    
+                    tile_count = len(bboxes)
+                    start = batch_id * tile_count
+                    end = (batch_id + 1) * tile_count
+                    custom_crossattn_batch = self.custom_crossattn[start:end]
+
+                    values = [cca['c_crossattn'] for cca in custom_crossattn_batch]
+                    if isinstance(values[0], torch.Tensor):
+                        c_tile['c_crossattn'] = torch.cat(values, dim=0)
+                    else:
+                        c_tile['c_crossattn'] = values
+     
                 # controlnet
                 # self.switch_controlnet_tensors(batch_id, N, len(bboxes), is_denoise=True)
                 if 'control' in c_in:
@@ -823,15 +849,19 @@ MAX_RESOLUTION=8192
 class TiledDiffusion():
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": {"model": ("MODEL", ),
-                                "method": (["MultiDiffusion", "Mixture of Diffusers", "SpotDiffusion"], {"default": "Mixture of Diffusers"}),
-                                # "tile_width": ("INT", {"default": 96, "min": 16, "max": 256, "step": 16}),
-                                "tile_width": ("INT", {"default": 96*opt_f, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
-                                # "tile_height": ("INT", {"default": 96, "min": 16, "max": 256, "step": 16}),
-                                "tile_height": ("INT", {"default": 96*opt_f, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
-                                "tile_overlap": ("INT", {"default": 8*opt_f, "min": 0, "max": 256*opt_f, "step": 4*opt_f}),
-                                "tile_batch_size": ("INT", {"default": 4, "min": 1, "max": MAX_RESOLUTION, "step": 1}),
-                            }}
+        return {
+                "required": 
+                    {"model": ("MODEL", ),
+                    "method": (["MultiDiffusion", "Mixture of Diffusers", "SpotDiffusion"], {"default": "Mixture of Diffusers"}),
+                    # "tile_width": ("INT", {"default": 96, "min": 16, "max": 256, "step": 16}),
+                    "tile_width": ("INT", {"default": 96*opt_f, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
+                    # "tile_height": ("INT", {"default": 96, "min": 16, "max": 256, "step": 16}),
+                    "tile_height": ("INT", {"default": 96*opt_f, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
+                    "tile_overlap": ("INT", {"default": 8*opt_f, "min": 0, "max": 256*opt_f, "step": 4*opt_f}),
+                    "tile_batch_size": ("INT", {"default": 4, "min": 1, "max": MAX_RESOLUTION, "step": 1}),            
+                }, "optional": {
+                    "tile_conditioning": ("CONDITIONING", )
+                }}
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "apply"
     CATEGORY = "_for_testing"
@@ -846,7 +876,7 @@ class TiledDiffusion():
     def __init__(self) -> None:
         self.__class__.instances.add(self)
 
-    def apply(self, model: ModelPatcher, method, tile_width, tile_height, tile_overlap, tile_batch_size):
+    def apply(self, model: ModelPatcher, method, tile_width, tile_height, tile_overlap, tile_batch_size, tile_conditioning=None):
         if method == "Mixture of Diffusers":
             self.impl = MixtureOfDiffusers()
         elif method == "MultiDiffusion":
@@ -869,6 +899,8 @@ class TiledDiffusion():
         self.impl.width = tile_width
         self.impl.height  = tile_height
         self.impl.overlap = tile_overlap
+        
+        self.impl.custom_crossattn = tile_conditioning
 
         # self.impl.init_grid_bbox(tile_width, tile_height, tile_overlap, tile_batch_size)
         # # init everything done, perform sanity check & pre-computations
