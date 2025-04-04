@@ -878,6 +878,33 @@ class TiledDiffusion():
         model.set_model_unet_function_wrapper(self.impl)
         model.model_options['tiled_diffusion'] = True
         return (model,)
+    
+class CalculateTiles():
+    def __init__(self):
+        pass
+    
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+                        "image_width": ("INT",),
+                        "image_height": ("INT",),
+                        "tile_width": ("INT", {"default": 96*opt_f, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
+                        "tile_height": ("INT", {"default": 96*opt_f, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
+                        "tile_overlap": ("INT", {"default": 8*opt_f, "min": 0, "max": 256*opt_f, "step": 4*opt_f}),
+                    }}
+    RETURN_TYPES = ("INT", "INT", )
+    RETURN_NAMES = ("rows", "cols", )
+    FUNCTION = "apply"
+    CATEGORY = "_for_testing"
+
+    def apply(self, image_width, image_height, tile_width, tile_height, tile_overlap):
+        stride_x = tile_width - tile_overlap
+        stride_y = tile_height - tile_overlap
+
+        cols = ceildiv(max(1, image_width - tile_overlap), stride_x)
+        rows = ceildiv(max(1, image_height - tile_overlap), stride_y)
+        return (rows, cols)
+     
 
 class SpotDiffusionParams():
     @classmethod
@@ -899,8 +926,10 @@ class SpotDiffusionParams():
 NODE_CLASS_MAPPINGS = {
     "TiledDiffusion": TiledDiffusion,
     "SpotDiffusionParams_TiledDiffusion": SpotDiffusionParams,
+    "CalculateTiles": CalculateTiles
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "TiledDiffusion": "Tiled Diffusion",
     "SpotDiffusionParams_TiledDiffusion": "SpotDiffusion Parameters",
+    "CalculateTiles": "CalculateTiles"
 }
