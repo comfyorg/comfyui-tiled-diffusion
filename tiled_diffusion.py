@@ -787,7 +787,10 @@ class MixtureOfDiffusers(AbstractDiffusion):
                             v = repeat_to_batch_size(v, x_tile.shape[0])
                     c_tile[k] = v
               
-                if 'c_crossattn' in c_in and hasattr(self, 'custom_crossattn'):
+                if 'c_crossattn' in c_in and hasattr(self, 'custom_crossattn'):  
+                    if self.num_tiles != len(self.custom_crossattn):
+                        raise ValueError(f'You need to provide one prompt per tile. You provided {len(self.custom_crossattn)} prompts for {self.num_tiles} tiles!')
+                                    
                     tile_count = len(bboxes)
                     start = batch_id * tile_count
                     end = (batch_id + 1) * tile_count
