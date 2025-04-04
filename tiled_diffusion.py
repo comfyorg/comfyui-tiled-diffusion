@@ -41,7 +41,6 @@ controlnet     = null_decorator
 stablesr       = null_decorator
 grid_bbox      = null_decorator
 custom_bbox    = null_decorator
-noise_inverse  = null_decorator
 
 class BBox:
     ''' grid bbox '''
@@ -246,16 +245,6 @@ class AbstractDiffusion:
     @grid_bbox
     def get_tile_weights(self) -> Union[Tensor, float]:
         return 1.0
-
-    @noise_inverse
-    def init_noise_inverse(self, steps:int, retouch:float, get_cache_callback, set_cache_callback, renoise_strength:float, renoise_kernel:int):
-        self.noise_inverse_enabled = True
-        self.noise_inverse_steps = steps
-        self.noise_inverse_retouch = float(retouch)
-        self.noise_inverse_renoise_strength = float(renoise_strength)
-        self.noise_inverse_renoise_kernel = int(renoise_kernel)
-        self.noise_inverse_set_cache = set_cache_callback
-        self.noise_inverse_get_cache = get_cache_callback
 
     def init_done(self):
         '''
@@ -907,33 +896,11 @@ class SpotDiffusionParams():
         model.model_options['tiled_diffusion_shift_method'] = shift_method
         return (model,)
 
-class NoiseInversion():
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {"model": ("MODEL", ),
-                                "positive": ("CONDITIONING", ),
-                                "negative": ("CONDITIONING", ),
-                                "latent_image": ("LATENT", ),
-                                "image": ("IMAGE", ),
-                                "steps": ("INT", {"default": 10, "min": 1, "max": 208, "step": 1}),
-                                "retouch": ("FLOAT", {"default": 1, "min": 1, "max": 100, "step": 0.1}),
-                                "renoise_strength": ("FLOAT", {"default": 1, "min": 1, "max": 2, "step": 0.01}),
-                                "renoise_kernel_size": ("INT", {"default": 2, "min": 2, "max": 512, "step": 1}),
-                            }}
-    RETURN_TYPES = ("LATENT",)
-    FUNCTION = "sample"
-    CATEGORY = "sampling"
-    def sample(self, model: ModelPatcher, positive, negative,
-                    latent_image, image, steps, retouch, renoise_strength, renoise_kernel_size):
-        return (latent_image,)
-
 NODE_CLASS_MAPPINGS = {
     "TiledDiffusion": TiledDiffusion,
     "SpotDiffusionParams_TiledDiffusion": SpotDiffusionParams,
-    # "NoiseInversion": NoiseInversion,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "TiledDiffusion": "Tiled Diffusion",
     "SpotDiffusionParams_TiledDiffusion": "SpotDiffusion Parameters",
-    # "NoiseInversion": "Noise Inversion",
 }
