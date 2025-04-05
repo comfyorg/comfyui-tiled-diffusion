@@ -776,16 +776,16 @@ class MixtureOfDiffusers(AbstractDiffusion):
                             v = repeat_to_batch_size(v, x_tile.shape[0])
                     c_tile[k] = v
               
-                if 'c_crossattn' in c_in and hasattr(self, 'custom_crossattn'):  
-                    if self.num_tiles != len(self.custom_crossattn):
-                        raise ValueError(f'You need to provide one prompt per tile. You provided {len(self.custom_crossattn)} prompts for {self.num_tiles} tiles!')
+                if 'c_crossattn' in c_in and hasattr(self, 'tile_conditioning') and self.tile_conditioning is not None:  
+                    if self.num_tiles != len(self.tile_conditioning):
+                        raise ValueError(f'You need to provide one conditioning per tile. You provided {len(self.tile_conditioning)} conditionings for {self.num_tiles} tiles!')
                                     
                     tile_count = len(bboxes)
                     start = batch_id * tile_count
                     end = (batch_id + 1) * tile_count
-                    custom_crossattn_batch = self.custom_crossattn[start:end]
+                    custom_crossattn_batch = self.tile_conditioning[start:end]
                     
-                    values = [cca[0]['cross_attn'] for cca in custom_crossattn_batch]
+                    values = [cca[0][0] for cca in custom_crossattn_batch]
                     new_cross_attn = torch.stack(values).squeeze(1).to(devices.device)
                     
                     if len(cond_or_uncond) == 1:
@@ -830,8 +830,7 @@ class TiledDiffusion():
                     "tile_overlap": ("INT", {"default": 8*opt_f, "min": 0, "max": 256*opt_f, "step": 4*opt_f}),
                     "tile_batch_size": ("INT", {"default": 4, "min": 1, "max": MAX_RESOLUTION, "step": 1}),          
                 }, "optional": {
-                    "clip": ("CLIP", ),  
-                    "prompts": ("STRING", {"forceInput": True}),
+                    "tile_conditioning": ("CONDITIONING", )
                 }}
     
     INPUT_IS_LIST = True
@@ -849,7 +848,7 @@ class TiledDiffusion():
     def __init__(self) -> None:
         self.__class__.instances.add(self)
 
-    def apply(self, model: ModelPatcher, method, tile_width, tile_height, tile_overlap, tile_batch_size, clip=None, prompts=None):
+    def apply(self, model: ModelPatcher, method, tile_width, tile_height, tile_overlap, tile_batch_size, tile_conditioning=None):
         model = model[0]
         method = method[0]
         tile_width = tile_width[0]
@@ -875,15 +874,7 @@ class TiledDiffusion():
         self.impl.height  = tile_height
         self.impl.overlap = tile_overlap
         
-        if prompts is not None and clip is not None:
-            clip = clip[0]
-            custom_crossattn = []
-            for prompt in prompts:
-                tokens = clip.tokenize(prompt)
-                conditioning = clip.encode_from_tokens_scheduled(tokens)
-                converted_conditioning = comfy.sampler_helpers.convert_cond(conditioning)
-                custom_crossattn.append(converted_conditioning)
-            self.impl.custom_crossattn = custom_crossattn
+        self.impl.tile_conditioning = tile_conditioning
 
         model = model.clone()
         model.set_model_unet_function_wrapper(self.impl)
