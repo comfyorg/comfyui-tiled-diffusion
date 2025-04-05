@@ -784,9 +784,20 @@ class MixtureOfDiffusers(AbstractDiffusion):
                     start = batch_id * tile_count
                     end = (batch_id + 1) * tile_count
                     custom_crossattn_batch = self.custom_crossattn[start:end]
-
+                    
                     values = [cca[0]['cross_attn'] for cca in custom_crossattn_batch]
-                    c_tile['c_crossattn'] = torch.stack(values).squeeze(1).to(devices.device)
+                    new_cross_attn = torch.stack(values).squeeze(1).to(devices.device)
+                    
+                    if len(cond_or_uncond) == 1:
+                        c_tile['c_crossattn'] = new_cross_attn
+                    else:
+                        cond_or_uncond = torch.tensor(cond_or_uncond)  
+                        cond_indices = (cond_or_uncond == 0).nonzero(as_tuple=True)[0]
+                        
+                        for i in range(len(cond_indices)):
+                            index = cond_indices[i]
+                            c_tile['c_crossattn'][index * tile_count : (index + 1) * tile_count] = new_cross_attn
+
 
                 # controlnet
                 if 'control' in c_in:
