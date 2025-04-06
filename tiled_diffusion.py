@@ -785,8 +785,7 @@ class MixtureOfDiffusers(AbstractDiffusion):
                     end = (batch_id + 1) * tile_count
                     custom_crossattn_batch = self.tile_conditioning[start:end]
                     
-                    values = [cca[0][0] for cca in custom_crossattn_batch]
-                    new_cross_attn = torch.stack(values).squeeze(1).to(devices.device)
+                    new_cross_attn = torch.stack(custom_crossattn_batch).squeeze(1).to(devices.device)
                     
                     if len(cond_or_uncond) == 1:
                         c_tile['c_crossattn'] = new_cross_attn
@@ -849,12 +848,18 @@ class TiledDiffusion():
         self.__class__.instances.add(self)
 
     def apply(self, model: ModelPatcher, method, tile_width, tile_height, tile_overlap, tile_batch_size, tile_conditioning=None):
-        model = model[0]
-        method = method[0]
-        tile_width = tile_width[0]
-        tile_height = tile_height[0]
-        tile_overlap = tile_overlap[0]
-        tile_batch_size = tile_batch_size[0]       
+        if isinstance(model, list) and len(model) >= 1:
+            model = model[0]
+        if isinstance(method, list) and len(method) >= 1:
+            method = method[0]
+        if isinstance(tile_width, list) and len(tile_width) >= 1:
+            tile_width = tile_width[0]
+        if isinstance(tile_height, list) and len(tile_height) >= 1:
+            tile_height = tile_height[0]
+        if isinstance(tile_overlap, list) and len(tile_overlap) >= 1:
+            tile_overlap = tile_overlap[0]
+        if isinstance(tile_batch_size, list) and len(tile_batch_size) >= 1:
+            tile_batch_size = tile_batch_size[0]       
         
         if method == "Mixture of Diffusers":
             self.impl = MixtureOfDiffusers()
@@ -874,7 +879,7 @@ class TiledDiffusion():
         self.impl.height  = tile_height
         self.impl.overlap = tile_overlap
         
-        self.impl.tile_conditioning = tile_conditioning
+        self.impl.tile_conditioning = [cca[0][0] for cca in tile_conditioning] if tile_conditioning is not None else None
 
         model = model.clone()
         model.set_model_unet_function_wrapper(self.impl)
